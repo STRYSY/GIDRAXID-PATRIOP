@@ -1,5 +1,8 @@
 -- [] GIDRAX mode
--- GIDRAXID | v4 | + FUN tab (Speedhack / Fly / Icon Changer)
+-- GIDRAXID | v8 FULL
+-- - убраны авто-циклы у срать/сать/движухи (только по кнопке)
+-- - длина говна увеличена (базовая длина 5)
+-- - добавлены новые ID иконок + дефолтная
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -25,6 +28,13 @@ local L = {
         speedHack="Спидхак", speedValue="Скорость (число):",
         applySpeed="Применить скорость", fly="Полёт", flySpeed="Скорость полёта:",
         iconChoose="Иконка меню",
+        poo="Срать", pee="Сать", movement="ГОВНО-ДВИЖУХА!!",
+        pooSize="Размер какашки:", peeSize="Размер лужи:",
+        pooLen="Длина", pooWid="Ширина", pooHei="Высота",
+        puddleLen="Длина лужи", puddleWid="Ширина лужи",
+        shitCount="Кол-во говна (20-100):",
+        togglePoo="Показать кнопку СРАТЬ", togglePee="Показать кнопку САТЬ",
+        toggleMovement="Показать кнопку ДВИЖУХА",
         miscTitle="РАЗНОЕ | НАСТРОЙКИ", strokeColor="Цвет интерфейса",
         rainbow="Радужный", red="Красный", blue="Синий", orange="Оранжевый",
         green="Зелёный", yellow="Жёлтый", white="Белый", purple="Фиолетовый",
@@ -38,6 +48,13 @@ local L = {
         speedHack="Speedhack", speedValue="Speed (number):",
         applySpeed="Apply speed", fly="Fly", flySpeed="Fly speed:",
         iconChoose="Menu icon",
+        poo="Poo", pee="Pee", movement="SHIT-MOVEMENT!!",
+        pooSize="Poop size:", peeSize="Puddle size:",
+        pooLen="Length", pooWid="Width", pooHei="Height",
+        puddleLen="Puddle length", puddleWid="Puddle width",
+        shitCount="Shit count (20-100):",
+        togglePoo="Show POO button", togglePee="Show PEE button",
+        toggleMovement="Show MOVEMENT button",
         miscTitle="MISC | SETTINGS", strokeColor="UI color",
         rainbow="Rainbow", red="Red", blue="Blue", orange="Orange",
         green="Green", yellow="Yellow", white="White", purple="Purple",
@@ -51,6 +68,13 @@ local L = {
         speedHack="Спідхак", speedValue="Швидкість (число):",
         applySpeed="Застосувати", fly="Політ", flySpeed="Швидкість польоту:",
         iconChoose="Іконка меню",
+        poo="Срати", pee="Сцяти", movement="ГІВНО-РУХУХА!!",
+        pooSize="Розмір какашки:", peeSize="Розмір калюжі:",
+        pooLen="Довжина", pooWid="Ширина", pooHei="Висота",
+        puddleLen="Довжина калюжі", puddleWid="Ширина калюжі",
+        shitCount="Кількість гівна (20-100):",
+        togglePoo="Показати кнопку СРАТИ", togglePee="Показати кнопку СЦЯТИ",
+        toggleMovement="Показати кнопку РУХУХА",
         miscTitle="РІЗНЕ | НАЛАШТУВАННЯ", strokeColor="Колір інтерфейсу",
         rainbow="Веселковий", red="Червоний", blue="Синій", orange="Помаранчевий",
         green="Зелений", yellow="Жовтий", white="Білий", purple="Фіолетовий",
@@ -64,6 +88,13 @@ local L = {
         speedHack="Спідхак", speedValue="Хуткасць (лік):",
         applySpeed="Прымяніць", fly="Паход", flySpeed="Хуткасць паходу:",
         iconChoose="Іконка меню",
+        poo="Сраць", pee="Сцаць", movement="ГАЎНО-РУХУХА!!",
+        pooSize="Памер какашкі:", peeSize="Памер лужыны:",
+        pooLen="Даўжыня", pooWid="Шырыня", pooHei="Вышыня",
+        puddleLen="Даўжыня лужыны", puddleWid="Шырыня лужыны",
+        shitCount="Колькасць гаўна (20-100):",
+        togglePoo="Паказаць кнопку СРАЦЬ", togglePee="Паказаць кнопку СЦАЦЬ",
+        toggleMovement="Паказаць кнопку РУХУХА",
         miscTitle="РОЗНАЕ | НАЛАДЫ", strokeColor="Колер інтэрфейсу",
         rainbow="Вясёлкавы", red="Чырвоны", blue="Сіні", orange="Аранжавы",
         green="Зялёны", yellow="Жоўты", white="Белы", purple="Фіялетавы",
@@ -170,10 +201,12 @@ local function StopParticles()
     ParticleLayer.Visible = false
 end
 
+local DEFAULT_ICON = "70416372811875"
+
 local Icon = Instance.new("ImageButton")
 Icon.Size = UDim2.new(0, 48, 0, 48)
 Icon.Position = UDim2.new(0, 20, 0.5, -24)
-Icon.Image = "rbxassetid://70416372811875"
+Icon.Image = "rbxassetid://" .. DEFAULT_ICON
 Icon.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Icon.BorderSizePixel = 0
 Icon.ZIndex = 1100
@@ -237,7 +270,6 @@ ContentScroll.ZIndex = 1011; ContentScroll.Parent = Content
 local ScrollLayout = Instance.new("UIListLayout")
 ScrollLayout.Padding = UDim.new(0, 5); ScrollLayout.SortOrder = Enum.SortOrder.LayoutOrder; ScrollLayout.Parent = ContentScroll
 
--- Открытие/закрытие
 local isOpen = false
 Icon.MouseButton1Click:Connect(function()
     isOpen = not isOpen
@@ -263,7 +295,6 @@ Icon.MouseButton1Click:Connect(function()
     end
 end)
 
--- Drag иконки
 local dragIcon, iconStart, iconPos
 Icon.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
@@ -280,7 +311,6 @@ UserInputService.InputEnded:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragIcon = false end
 end)
 
--- Drag меню
 local dragMenu, menuStart, menuPos
 Header.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
@@ -298,7 +328,7 @@ UserInputService.InputEnded:Connect(function(i)
 end)
 
 -- ============================================================
--- ПЕРСИСТЕНТНЫЕ СОСТОЯНИЯ
+-- СОСТОЯНИЯ
 -- ============================================================
 
 local AutoFarmRunning = false
@@ -314,6 +344,17 @@ local FlyBodyVelocity = nil
 local FlyKeys = {}
 local MobileFlyDir = Vector3.zero
 
+-- базовая длина 5 (было 2.5)
+local POO_BASE_LEN = 5
+local PooConfig = { length = 1.0, width = 1.0, height = 1.0 }
+local PeeConfig = { puddleLength = 1.0, puddleWidth = 1.0 }
+local ShitCount = 50
+
+-- Только видимость кнопок, не авто-циклы
+local ShowPooBtn = false
+local ShowPeeBtn = false
+local ShowMovementBtn = false
+
 -- ============================================================
 -- УТИЛИТЫ GUI
 -- ============================================================
@@ -325,6 +366,11 @@ local function RefreshAccentEverywhere()
     local c = GetAccent()
     for _, d in ipairs(Menu:GetDescendants()) do
         if d:IsA("UIStroke") then d.Color = c end
+    end
+    if FloatingFrame then
+        for _, d in ipairs(FloatingFrame:GetDescendants()) do
+            if d:IsA("UIStroke") then d.Color = c end
+        end
     end
     IconStroke.Color = c
     Title.TextColor3 = c
@@ -438,7 +484,7 @@ local function CreateTabButton(name, order)
 end
 
 -- ============================================================
--- FARM ЛОГИКА
+-- FARM
 -- ============================================================
 
 local ResourceList = {
@@ -495,10 +541,7 @@ end
 
 local function SetAutoFarm(state)
     AutoFarmRunning = state
-    if AutoFarmTask then
-        pcall(task.cancel, AutoFarmTask)
-        AutoFarmTask = nil
-    end
+    if AutoFarmTask then pcall(task.cancel, AutoFarmTask); AutoFarmTask = nil end
     if state then
         AutoFarmTask = task.spawn(function()
             while AutoFarmRunning do
@@ -530,13 +573,11 @@ local function SetAntiAfk(state)
 end
 
 -- ============================================================
--- FUN ЛОГИКА
+-- SPEED / FLY
 -- ============================================================
 
--- Спидхак
 local function ApplySpeedHack(value)
-    local num = tonumber(value)
-    if not num then return end
+    local num = tonumber(value); if not num then return end
     num = math.clamp(num, 0, 500)
     SpeedHackValue = num
     local char = LocalPlayer.Character
@@ -546,17 +587,13 @@ local function ApplySpeedHack(value)
     end
 end
 
--- Полёт
 local function StopFly()
     FlyEnabled = false
     if FlyConnection then FlyConnection:Disconnect(); FlyConnection = nil end
     if FlyBodyVelocity then pcall(function() FlyBodyVelocity:Destroy() end); FlyBodyVelocity = nil end
     if LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.PlatformStand = false
-            hum.WalkSpeed = SpeedHackValue
-        end
+        if hum then hum.PlatformStand = false; hum.WalkSpeed = SpeedHackValue end
     end
     MobileFlyDir = Vector3.zero
 end
@@ -578,16 +615,11 @@ local function StartFly()
     FlyBodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
     FlyBodyVelocity.Parent = hrp
 
-    -- клавиатура
     UserInputService.InputBegan:Connect(function(i, gp)
-        if not gp and i.UserInputType == Enum.UserInputType.Keyboard then
-            FlyKeys[i.KeyCode] = true
-        end
+        if not gp and i.UserInputType == Enum.UserInputType.Keyboard then FlyKeys[i.KeyCode] = true end
     end)
     UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Keyboard then
-            FlyKeys[i.KeyCode] = false
-        end
+        if i.UserInputType == Enum.UserInputType.Keyboard then FlyKeys[i.KeyCode] = false end
     end)
 
     FlyConnection = RunService.RenderStepped:Connect(function()
@@ -605,15 +637,10 @@ local function StartFly()
         if FlyKeys[Enum.KeyCode.Space] then dir += Vector3.new(0,1,0) end
         if FlyKeys[Enum.KeyCode.LeftControl] then dir -= Vector3.new(0,1,0) end
         if FlyKeys[Enum.KeyCode.LeftShift] then dir += Camera.CFrame.LookVector end
-
-        -- мобильные кнопки
-        if MobileFlyDir.Magnitude > 0 then
-            dir += MobileFlyDir
-        end
+        if MobileFlyDir.Magnitude > 0 then dir += MobileFlyDir end
 
         if dir.Magnitude > 0 then
-            dir = dir.Unit
-            FlyBodyVelocity.Velocity = dir * FlySpeed
+            FlyBodyVelocity.Velocity = dir.Unit * FlySpeed
         else
             FlyBodyVelocity.Velocity = Vector3.zero
         end
@@ -624,7 +651,6 @@ local function SetFly(state)
     if state then StartFly() else StopFly() end
 end
 
--- Мобильные кнопки управления полётом
 local function CreateMobileFlyControls()
     local pad = Instance.new("Frame")
     pad.Name = "MobileFlyPad"
@@ -656,21 +682,351 @@ local function CreateMobileFlyControls()
         b.MouseButton1Down:Connect(onDown)
         b.MouseButton1Up:Connect(onUp)
         b.MouseLeave:Connect(onUp)
-        b.TouchLongPress:Connect(function() end)
         return b
     end
 
-    -- крест: W / S / A / D / Up / Down
     makeBtn("▲", UDim2.new(0, 65, 0, 5), function() MobileFlyDir += Camera.CFrame.LookVector end, function() MobileFlyDir -= Camera.CFrame.LookVector end)
     makeBtn("▼", UDim2.new(0, 65, 0, 125), function() MobileFlyDir -= Camera.CFrame.LookVector end, function() MobileFlyDir += Camera.CFrame.LookVector end)
     makeBtn("◀", UDim2.new(0, 5, 0, 65), function() MobileFlyDir -= Camera.CFrame.RightVector end, function() MobileFlyDir += Camera.CFrame.RightVector end)
     makeBtn("▶", UDim2.new(0, 125, 0, 65), function() MobileFlyDir += Camera.CFrame.RightVector end, function() MobileFlyDir -= Camera.CFrame.RightVector end)
     makeBtn("↑", UDim2.new(0, 65, 0, 65), function() MobileFlyDir += Vector3.new(0,1,0) end, function() MobileFlyDir -= Vector3.new(0,1,0) end)
-
     return pad
 end
 
 local MobileFlyPad = CreateMobileFlyControls()
+
+-- ============================================================
+-- КАСТОМНЫЙ ВЗРЫВ
+-- ============================================================
+
+local function CreateCustomExplosion(position, radius, pressure)
+    radius = radius or 18
+    pressure = pressure or 120000
+
+    local flash = Instance.new("Part")
+    flash.Shape = Enum.PartType.Ball
+    flash.Size = Vector3.new(1, 1, 1)
+    flash.Color = Color3.fromRGB(255, 200, 50)
+    flash.Material = Enum.Material.Neon
+    flash.Transparency = 0.2
+    flash.Anchored = true
+    flash.CanCollide = false
+    flash.CFrame = CFrame.new(position)
+    flash.Parent = Workspace
+    TweenService:Create(flash, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = Vector3.new(radius*2,radius*2,radius*2), Transparency = 1}):Play()
+    task.delay(0.5, function() if flash and flash.Parent then flash:Destroy() end end)
+
+    local sw = Instance.new("Part")
+    sw.Shape = Enum.PartType.Cylinder
+    sw.Size = Vector3.new(0.1, 1, 1)
+    sw.Color = Color3.fromRGB(255, 150, 0)
+    sw.Material = Enum.Material.Neon
+    sw.Transparency = 0.3
+    sw.Anchored = true
+    sw.CanCollide = false
+    sw.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+    sw.Parent = Workspace
+    TweenService:Create(sw, TweenInfo.new(0.6), {Size = Vector3.new(0.1, radius*4, radius*4), Transparency = 1}):Play()
+    task.delay(0.7, function() if sw and sw.Parent then sw:Destroy() end end)
+
+    local light = Instance.new("PointLight")
+    light.Color = Color3.fromRGB(255, 180, 50)
+    light.Range = radius * 3
+    light.Brightness = 10
+    light.Parent = flash
+    TweenService:Create(light, TweenInfo.new(0.5), {Brightness = 0}):Play()
+
+    local expl = Instance.new("Explosion")
+    expl.Position = position
+    expl.BlastRadius = radius
+    expl.BlastPressure = pressure
+    expl.Visible = false
+    expl.Parent = Workspace
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                local dist = (hrp.Position - position).Magnitude
+                if dist <= radius then
+                    pcall(function() hum:TakeDamage(math.floor(hum.MaxHealth * (1 - dist/radius))) end)
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- ГОВНО (вытянутый цилиндр, длина базовая 5)
+-- ============================================================
+
+local function CreatePooEntity(position, direction, sizeMul)
+    sizeMul = sizeMul or 1
+    local model = Instance.new("Model")
+    model.Name = "GIDRAX_PoopEntity"
+
+    local len = POO_BASE_LEN * PooConfig.length * sizeMul
+    local rad = 0.5 * PooConfig.width * sizeMul
+    local hei = 0.5 * PooConfig.height * sizeMul
+
+    local part = Instance.new("Part")
+    part.Name = "PooBody"
+    part.Shape = Enum.PartType.Cylinder
+    part.Size = Vector3.new(hei, rad * 2, len)
+    part.Color = Color3.fromRGB(90, 55, 25)
+    part.Material = Enum.Material.SmoothPlastic
+    part.CanCollide = true
+    part.Position = position
+    if direction and direction.Magnitude > 0.01 then
+        part.CFrame = CFrame.new(position, position + direction) * CFrame.Angles(0, math.rad(90), 0)
+    else
+        part.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+    end
+    part.Parent = model
+    model.PrimaryPart = part
+    model.Parent = Workspace
+    part.AssemblyLinearVelocity = direction and direction.Unit * 6 + Vector3.new(0, -5, 0) or Vector3.new(math.random(-3,3), -5, math.random(-3,3))
+
+    -- след-лужа
+    local stainConn
+    local lastStainPos = nil
+    stainConn = RunService.Heartbeat:Connect(function()
+        if not part or not part.Parent then stainConn:Disconnect(); return end
+        if part.Position.Y < 5 then
+            if not lastStainPos or (part.Position - lastStainPos).Magnitude > 3 then
+                lastStainPos = part.Position
+                local stain = Instance.new("Part")
+                stain.Name = "GIDRAX_ShitTrail"
+                stain.Shape = Enum.PartType.Cylinder
+                stain.Size = Vector3.new(0.1, rad * 2.5, rad * 3)
+                stain.Color = Color3.fromRGB(75, 45, 20)
+                stain.Material = Enum.Material.SmoothPlastic
+                stain.Transparency = 0.3
+                stain.CanCollide = false
+                stain.Anchored = true
+                stain.CFrame = CFrame.new(part.Position.X, part.Position.Y - 0.4, part.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
+                stain.Parent = Workspace
+                task.delay(20, function() if stain and stain.Parent then stain:Destroy() end end)
+            end
+        end
+    end)
+
+    task.delay(30, function()
+        if stainConn then stainConn:Disconnect() end
+        if model and model.Parent then model:Destroy() end
+    end)
+
+    return model
+end
+
+local function SpawnPoo()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    CreatePooEntity(hrp.Position + Vector3.new(0, -2.5, 0), hrp.CFrame.LookVector, 1)
+end
+
+-- ============================================================
+-- САТЬ (только лужа под игроком)
+-- ============================================================
+
+local function SpawnPee()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {char}
+    local result = Workspace:Raycast(hrp.Position, Vector3.new(0, -1, 0) * 500, params)
+    local groundY = result and result.Position.Y or (hrp.Position.Y - 3)
+
+    local puddle = Instance.new("Part")
+    puddle.Name = "GIDRAX_Puddle"
+    puddle.Shape = Enum.PartType.Cylinder
+    puddle.Size = Vector3.new(0.1, 1 * PeeConfig.puddleWidth, 1 * PeeConfig.puddleLength)
+    puddle.Color = Color3.fromRGB(255, 230, 0)
+    puddle.Material = Enum.Material.Neon
+    puddle.Transparency = 0.25
+    puddle.CanCollide = false
+    puddle.Anchored = true
+    puddle.CFrame = CFrame.new(hrp.Position.X, groundY + 0.05, hrp.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
+    puddle.Parent = Workspace
+    TweenService:Create(puddle, TweenInfo.new(1), {Size = Vector3.new(0.1, 1.3 * PeeConfig.puddleWidth, 1.3 * PeeConfig.puddleLength)}):Play()
+    task.delay(20, function() if puddle and puddle.Parent then puddle:Destroy() end end)
+end
+
+-- ============================================================
+-- ПАДАЮЩЕЕ ГОВНО
+-- ============================================================
+
+local function CreateFallingShit(targetPos)
+    local model = Instance.new("Model")
+    model.Name = "GIDRAX_FallingShit"
+
+    local len = POO_BASE_LEN * PooConfig.length
+    local rad = 0.5 * PooConfig.width
+    local hei = 0.5 * PooConfig.height
+
+    local body = Instance.new("Part")
+    body.Name = "ShitBody"
+    body.Shape = Enum.PartType.Cylinder
+    body.Size = Vector3.new(hei, rad * 2, len)
+    body.Color = Color3.fromRGB(90, 55, 25)
+    body.Material = Enum.Material.SmoothPlastic
+    body.CanCollide = false
+    body.Position = targetPos + Vector3.new(math.random(-80,80), 180, math.random(-80,80))
+    body.CFrame = CFrame.new(body.Position) * CFrame.Angles(0, 0, math.rad(90))
+    body.Parent = model
+    model.PrimaryPart = body
+    model.Parent = Workspace
+
+    local speed = math.random(90, 130)
+    local exploded = false
+    local conn
+    local rayParam = RaycastParams.new()
+    rayParam.FilterType = Enum.RaycastFilterType.Exclude
+    rayParam.FilterDescendantsInstances = {model}
+
+    local function Detonate(hitPosition)
+        if exploded then return end
+        exploded = true
+        if conn then conn:Disconnect(); conn = nil end
+
+        local explPos = hitPosition or body.Position
+        CreateCustomExplosion(explPos, 18, 120000)
+
+        local stain = Instance.new("Part")
+        stain.Name = "GIDRAX_ShitStain"
+        stain.Shape = Enum.PartType.Cylinder
+        stain.Size = Vector3.new(0.1, math.random(8, 16), math.random(8, 16))
+        stain.Color = Color3.fromRGB(75, 45, 20)
+        stain.Material = Enum.Material.SmoothPlastic
+        stain.Transparency = 0.15
+        stain.CanCollide = false
+        stain.Anchored = true
+        stain.CFrame = CFrame.new(explPos) * CFrame.Angles(0, math.random() * math.pi * 2, math.rad(90))
+        stain.Parent = Workspace
+        task.delay(25, function() if stain and stain.Parent then stain:Destroy() end end)
+
+        for i = 1, math.random(8, 14) do
+            local chunk = Instance.new("Part")
+            chunk.Shape = Enum.PartType.Ball
+            chunk.Size = Vector3.new(0.4, 0.4, 0.4) * math.random(50, 150) / 100
+            chunk.Color = Color3.fromRGB(90, 55, 25)
+            chunk.Material = Enum.Material.SmoothPlastic
+            chunk.CanCollide = true
+            chunk.Position = body.Position
+            chunk.Parent = Workspace
+            chunk.AssemblyLinearVelocity = Vector3.new(math.random(-40,40), math.random(20,60), math.random(-40,40))
+            task.delay(6, function() if chunk and chunk.Parent then chunk:Destroy() end end)
+        end
+
+        body:Destroy()
+        if model and model.Parent then model:Destroy() end
+    end
+
+    conn = RunService.Heartbeat:Connect(function(dt)
+        if exploded then return end
+        if not body or not body.Parent then
+            exploded = true; if conn then conn:Disconnect() end
+            return
+        end
+
+        body.Position = body.Position - Vector3.new(0, speed * dt, 0)
+        body.CFrame = CFrame.new(body.Position) * CFrame.Angles(0, tick() * 5, math.rad(90))
+
+        local hit = Workspace:Raycast(body.Position, Vector3.new(0, -3, 0), rayParam)
+        if hit then Detonate(hit.Position); return end
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - body.Position).Magnitude < 4 then
+                    Detonate(body.Position); return
+                end
+            end
+        end
+
+        if body.Position.Y < -50 then Detonate(body.Position) end
+    end)
+
+    task.delay(20, function()
+        if exploded then return end
+        if body and body.Parent then Detonate(body.Position) else exploded = true; if conn then conn:Disconnect() end end
+    end)
+end
+
+local function LaunchMovement()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local count = math.clamp(ShitCount, 20, 100)
+    for i = 1, count do
+        task.spawn(function()
+            task.wait(math.random() * 6)
+            CreateFallingShit(hrp.Position + Vector3.new(math.random(-40,40), 0, math.random(-40,40)))
+        end)
+    end
+end
+
+-- ============================================================
+-- ПЛАВАЮЩИЕ КНОПКИ (появляются по тумблерам)
+-- ============================================================
+
+local FloatingFrame = nil
+
+local function CreateFloatingButtons()
+    if FloatingFrame and FloatingFrame.Parent then FloatingFrame:Destroy() end
+    FloatingFrame = nil
+
+    if not (ShowPooBtn or ShowPeeBtn or ShowMovementBtn) then return end
+
+    FloatingFrame = Instance.new("Frame")
+    FloatingFrame.Name = "GIDRAXID_Floating"
+    FloatingFrame.BackgroundTransparency = 1
+    FloatingFrame.ZIndex = 1150
+    FloatingFrame.Parent = ScreenGui
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = FloatingFrame
+
+    local function makeBtn(text, color, order, cb)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(1, 0, 0, 40)
+        b.BackgroundColor3 = color
+        b.Text = text
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 11
+        b.LayoutOrder = order
+        b.ZIndex = 1151
+        b.Parent = FloatingFrame
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = b
+        local s = Instance.new("UIStroke"); s.Thickness = 2; s.Color = GetAccent(); s.Parent = b
+        b.MouseButton1Click:Connect(function()
+            local ok, err = pcall(cb)
+            if not ok then warn("[GIDRAX] " .. tostring(err)) end
+        end)
+    end
+
+    local count = 0
+    local w = 150
+    if ShowPooBtn then count = count + 1; makeBtn(T("poo"), Color3.fromRGB(90, 55, 25), count, SpawnPoo) end
+    if ShowPeeBtn then count = count + 1; makeBtn(T("pee"), Color3.fromRGB(200, 180, 0), count, SpawnPee) end
+    if ShowMovementBtn then count = count + 1; makeBtn(T("movement"), Color3.fromRGB(180, 0, 0), count, LaunchMovement) end
+
+    FloatingFrame.Size = UDim2.new(0, w, 0, count * 46)
+    FloatingFrame.Position = UDim2.new(1, -(w + 20), 0.5, -(count * 46 / 2))
+end
 
 -- ============================================================
 -- ВКЛАДКИ
@@ -722,21 +1078,17 @@ local function BuildFarmTab()
 
     CreateToggle(T("autoFarm"), order, AutoFarmRunning, SetAutoFarm)
     order = order + 1
-
     CreateToggle(T("antiAfk"), order, AntiAfkRunning, SetAntiAfk)
 end
 
--- === FUN ===
+-- ID иконок: дефолтная + все старые + новые. 92578209609345 уже был в списке — оставлен один раз.
 local IconPresetIDs = {
-    "121475011102153",
-    "113291566352727",
-    "98847893535543",
-    "121830354147863",
-    "92191612727880",
-    "98415300202655",
-    "92578209609345",
-    "87110821698730",
-    "104990937064232",
+    DEFAULT_ICON,
+    "121475011102153","113291566352727","98847893535543",
+    "121830354147863","92191612727880","98415300202655",
+    "92578209609345","87110821698730","104990937064232",
+    "136153613459621","97734301193517","115995678511946",
+    "76694822373548","82851417846709",
 }
 
 local function BuildFunTab()
@@ -744,31 +1096,22 @@ local function BuildFunTab()
     CreateSectionTitle(T("funTitle"), 1)
     local order = 2
 
-    -- Спидхак
     CreateSectionTitle(T("speedHack"), order); order = order + 1
-    CreateTextBox(T("speedValue"), order, tostring(SpeedHackValue), function(text)
-        ApplySpeedHack(text)
-    end)
+    CreateTextBox(T("speedValue"), order, tostring(SpeedHackValue), function(text) ApplySpeedHack(text) end)
     order = order + 1
-    CreateButton(T("applySpeed"), order, function()
-        ApplySpeedHack(tostring(SpeedHackValue))
-    end)
+    CreateButton(T("applySpeed"), order, function() ApplySpeedHack(tostring(SpeedHackValue)) end)
     order = order + 1
 
-    -- Fly
     CreateSectionTitle(T("fly"), order); order = order + 1
     CreateTextBox(T("flySpeed"), order, tostring(FlySpeed), function(text)
-        local n = tonumber(text)
-        if n then FlySpeed = math.clamp(n, 5, 500) end
+        local n = tonumber(text); if n then FlySpeed = math.clamp(n, 5, 500) end
     end)
     order = order + 1
     CreateToggle(T("fly"), order, FlyEnabled, function(state)
-        SetFly(state)
-        MobileFlyPad.Visible = state
+        SetFly(state); MobileFlyPad.Visible = state
     end)
     order = order + 1
 
-    -- Иконка
     CreateSectionTitle(T("iconChoose"), order); order = order + 1
     local grid = Instance.new("Frame")
     grid.Size = UDim2.new(1, -10, 0, 0)
@@ -777,30 +1120,64 @@ local function BuildFunTab()
     grid.LayoutOrder = order
     grid.ZIndex = 1012
     grid.Parent = ContentScroll
-
     local gl = Instance.new("UIGridLayout")
-    gl.CellSize = UDim2.new(0, 42, 0, 42)
-    gl.CellPadding = UDim2.new(0, 5, 0, 5)
-    gl.SortOrder = Enum.SortOrder.LayoutOrder
-    gl.Parent = grid
-
+    gl.CellSize = UDim2.new(0, 42, 0, 42); gl.CellPadding = UDim2.new(0, 5, 0, 5)
+    gl.SortOrder = Enum.SortOrder.LayoutOrder; gl.Parent = grid
     for i, id in ipairs(IconPresetIDs) do
         local btn = Instance.new("ImageButton")
         btn.Size = UDim2.new(0, 42, 0, 42)
         btn.Image = "rbxassetid://" .. id
         btn.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
-        btn.LayoutOrder = i
-        btn.ZIndex = 1013
-        btn.Parent = grid
+        btn.LayoutOrder = i; btn.ZIndex = 1013; btn.Parent = grid
         local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0, 6); bc.Parent = btn
         local bs = Instance.new("UIStroke"); bs.Thickness = 1.5; bs.Color = GetAccent(); bs.Parent = btn
-        btn.MouseButton1Click:Connect(function()
-            Icon.Image = "rbxassetid://" .. id
-        end)
+        btn.MouseButton1Click:Connect(function() Icon.Image = "rbxassetid://" .. id end)
     end
+    order = order + 1
+
+    CreateSectionTitle(T("pooSize"), order); order = order + 1
+    CreateTextBox(T("pooLen"), order, tostring(PooConfig.length), function(t)
+        local n = tonumber(t); if n then PooConfig.length = math.clamp(n, 0.1, 10) end
+    end)
+    order = order + 1
+    CreateTextBox(T("pooWid"), order, tostring(PooConfig.width), function(t)
+        local n = tonumber(t); if n then PooConfig.width = math.clamp(n, 0.1, 10) end
+    end)
+    order = order + 1
+    CreateTextBox(T("pooHei"), order, tostring(PooConfig.height), function(t)
+        local n = tonumber(t); if n then PooConfig.height = math.clamp(n, 0.1, 10) end
+    end)
+    order = order + 1
+    CreateToggle(T("togglePoo"), order, ShowPooBtn, function(state)
+        ShowPooBtn = state; CreateFloatingButtons()
+    end)
+    order = order + 1
+
+    CreateSectionTitle(T("peeSize"), order); order = order + 1
+    CreateTextBox(T("puddleLen"), order, tostring(PeeConfig.puddleLength), function(t)
+        local n = tonumber(t); if n then PeeConfig.puddleLength = math.clamp(n, 0.5, 30) end
+    end)
+    order = order + 1
+    CreateTextBox(T("puddleWid"), order, tostring(PeeConfig.puddleWidth), function(t)
+        local n = tonumber(t); if n then PeeConfig.puddleWidth = math.clamp(n, 0.5, 30) end
+    end)
+    order = order + 1
+    CreateToggle(T("togglePee"), order, ShowPeeBtn, function(state)
+        ShowPeeBtn = state; CreateFloatingButtons()
+    end)
+    order = order + 1
+
+    CreateSectionTitle(T("movement"), order); order = order + 1
+    CreateTextBox(T("shitCount"), order, tostring(ShitCount), function(t)
+        local n = tonumber(t); if n then ShitCount = math.clamp(math.floor(n), 20, 100) end
+    end)
+    order = order + 1
+    CreateToggle(T("toggleMovement"), order, ShowMovementBtn, function(state)
+        ShowMovementBtn = state; CreateFloatingButtons()
+    end)
+    order = order + 1
 end
 
--- === MISC ===
 local StrokePresets = {
     {key="rainbow", rainbow=true},
     {key="red", color=Color3.fromRGB(255,0,0)},
@@ -825,6 +1202,7 @@ local function RebuildAll()
     elseif CurrentTabBtn == TabFun then BuildFunTab()
     else BuildMiscTabRef() end
     RefreshAccentEverywhere()
+    CreateFloatingButtons()
 end
 
 local function SetAccentPreset(preset)
@@ -880,5 +1258,10 @@ TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, BuildMiscTabRef)
 CurrentTabBtn = TabFarm
 BuildFarmTab()
 RefreshAccentEverywhere()
+CreateFloatingButtons()
 
-print("[GIDRAXID] v4 loaded | FUN: speedhack / fly / icon changer")
+_G.GIDRAX_Poo = SpawnPoo
+_G.GIDRAX_Pee = SpawnPee
+_G.GIDRAX_Movement = LaunchMovement
+
+print("[GIDRAXID] v8 FULL loaded")
