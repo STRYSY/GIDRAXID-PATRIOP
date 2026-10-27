@@ -1,7 +1,7 @@
 -- [] GIDRAX mode
 -- GIDRAXID | v11 FULL
--- Добавлено: распознавание СВОЕГО участка от ЧУЖОГО.
--- Сканирует только объекты в радиусе своей территории (определяется по нику игрока / Owner / Plot).
+-- Добавлено: распознавание СВОЕГО участка (только свой плот/зона)
+-- Сбор идёт ТОЛЬКО с твоего участка, чужие плоты игнорируются.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -21,11 +21,9 @@ local Camera = Workspace.CurrentCamera
 local Lang = "ru"
 local L = {
     ru = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РАЗНОЕ",
-        farmTitle="ФЕРМА | СБОР РЕСУРСОВ", scan="Сканировать МОЙ участок",
-        collectAll="Собрать ВСЁ (мой участок)", autoFarm="Авто-сбор (мой участок)",
-        antiAfk="Анти-АФК",
-        noneFound="Ресурсы на моём участке не найдены.",
-        ownOnly="Только мой участок",
+        farmTitle="ФЕРМА | СБОР РЕСУРСОВ", scan="Сканировать участок",
+        collectAll="Собрать ВСЁ", autoFarm="Авто-сбор", antiAfk="Анти-АФК",
+        noneFound="Ресурсы не найдены на твоём участке.",
         funTitle="FUN | ФУНКЦИИ",
         speedHack="Спидхак", speedValue="Скорость (число):",
         applySpeed="Применить скорость", fly="Полёт", flySpeed="Скорость полёта:",
@@ -44,11 +42,9 @@ local L = {
         antiLag="Anti-Lag (частицы/свет)", fpsBoost="FPS Boost (тени/пост-эффекты)",
         on="ВКЛ", off="ВЫКЛ" },
     en = { title="GIDRAXID", farm="FARM", fun="FUN", misc="MISC",
-        farmTitle="FARM | RESOURCE COLLECTION", scan="Scan MY plot",
-        collectAll="Collect ALL (my plot)", autoFarm="Auto-farm (my plot)",
-        antiAfk="Anti-AFK",
-        noneFound="No resources on my plot.",
-        ownOnly="Only my plot",
+        farmTitle="FARM | RESOURCE COLLECTION", scan="Scan plot",
+        collectAll="Collect ALL", autoFarm="Auto-farm", antiAfk="Anti-AFK",
+        noneFound="No resources on your plot.",
         funTitle="FUN | FEATURES",
         speedHack="Speedhack", speedValue="Speed (number):",
         applySpeed="Apply speed", fly="Fly", flySpeed="Fly speed:",
@@ -67,11 +63,9 @@ local L = {
         antiLag="Anti-Lag (particles/light)", fpsBoost="FPS Boost (shadows/post-fx)",
         on="ON", off="OFF" },
     uk = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РІЗНЕ",
-        farmTitle="ФЕРМА | ЗБІР РЕСУРСІВ", scan="Сканувати МІЙ участок",
-        collectAll="Зібрати ВСЕ (мій участок)", autoFarm="Авто-збір (мій участок)",
-        antiAfk="Анти-АФК",
-        noneFound="Ресурси на моєму участку не знайдено.",
-        ownOnly="Тільки мій участок",
+        farmTitle="ФЕРМА | ЗБІР РЕСУРСІВ", scan="Сканувати ділянку",
+        collectAll="Зібрати ВСЕ", autoFarm="Авто-збір", antiAfk="Анти-АФК",
+        noneFound="Ресурси не знайдено на твоїй ділянці.",
         funTitle="FUN | ФУНКЦІЇ",
         speedHack="Спідхак", speedValue="Швидкість (число):",
         applySpeed="Застосувати", fly="Політ", flySpeed="Швидкість польоту:",
@@ -90,11 +84,9 @@ local L = {
         antiLag="Anti-Lag (частинки/світло)", fpsBoost="FPS Boost (тіні/пост-ефекти)",
         on="УВІМК", off="ВИКЛ" },
     be = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РОЗНАЕ",
-        farmTitle="ФЕРМА | ЗБОР РЭСУРСАЎ", scan="Сканаваць МОЙ участк",
-        collectAll="Сабраць УСЁ (мой участк)", autoFarm="Аўта-збор (мой участк)",
-        antiAfk="Анты-АФК",
-        noneFound="Рэсурсы на маім участку не знойдзены.",
-        ownOnly="Толькі мой участк",
+        farmTitle="ФЕРМА | ЗБОР РЭСУРСАЎ", scan="Сканаваць участк",
+        collectAll="Сабраць УСЁ", autoFarm="Аўта-збор", antiAfk="Анты-АФК",
+        noneFound="Рэсурсы не знойдзены на тваёй дзялянцы.",
         funTitle="FUN | ФУНКЦЫІ",
         speedHack="Спідхак", speedValue="Хуткасць (лік):",
         applySpeed="Прымяніць", fly="Паход", flySpeed="Хуткасць паходу:",
@@ -110,7 +102,7 @@ local L = {
         rainbow="Вясёлкавы", red="Чырвоны", blue="Сіні", orange="Аранжавы",
         green="Зялёны", yellow="Жоўты", white="Белы", purple="Фіялетавы",
         azure="Лазурны", cyan="Блакітны", language="Мова",
-        antiLag="Anti-Lag (часцінкі/святло)", fpsBoost="FPS Boost (цені/пост-эфекты)",
+        antiLag="Anti-Lag (часцінкі/святло)", fpsBoost="FPS Boost (цені/пост-эфэкты)",
         on="УКЛ", off="ВЫКЛ" },
 }
 local function T(k) return L[Lang][k] or k end
@@ -369,87 +361,222 @@ local AntiLagEnabled = false
 local FPSBoostEnabled = false
 
 -- ============================================================
+-- УТИЛИТЫ GUI
+-- ============================================================
+
+local CurrentTabBtn = nil
+local AllTabButtons = {}
+
+local function RefreshAccentEverywhere()
+    local c = GetAccent()
+    for _, d in ipairs(Menu:GetDescendants()) do
+        if d:IsA("UIStroke") then d.Color = c end
+    end
+    if FloatingFrame then
+        for _, d in ipairs(FloatingFrame:GetDescendants()) do
+            if d:IsA("UIStroke") then d.Color = c end
+        end
+    end
+    IconStroke.Color = c
+    Title.TextColor3 = c
+    ContentScroll.ScrollBarImageColor3 = c
+    if Overlay.Visible then Overlay.BackgroundColor3 = c end
+    for _, p in ipairs(particleList) do
+        if p and p.Parent then p.BackgroundColor3 = c end
+    end
+    for _, tb in ipairs(AllTabButtons) do
+        if tb == CurrentTabBtn then
+            tb.BackgroundColor3 = Color3.new(c.R*0.25, c.G*0.25, c.B*0.25)
+            tb.TextColor3 = c
+        else
+            tb.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+            tb.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end
+    end
+end
+
+local function ClearContent()
+    for _, c in ipairs(ContentScroll:GetChildren()) do
+        if c:IsA("GuiObject") then c:Destroy() end
+    end
+end
+
+local function CreateSectionTitle(text, order)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -10, 0, 26)
+    lbl.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+    lbl.BackgroundTransparency = 0.3
+    lbl.Text = "  " .. text
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextColor3 = GetAccent()
+    lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 12
+    lbl.LayoutOrder = order; lbl.ZIndex = 1012; lbl.Parent = ContentScroll
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,4); c.Parent = lbl
+    local s = Instance.new("UIStroke"); s.Thickness = 1; s.Color = GetAccent(); s.Parent = lbl
+    return lbl
+end
+
+local function CreateButton(text, order, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    btn.Text = text; btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.Font = Enum.Font.Gotham; btn.TextSize = 12
+    btn.LayoutOrder = order; btn.ZIndex = 1012; btn.Parent = ContentScroll
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = btn
+    local s = Instance.new("UIStroke"); s.Thickness = 1.5; s.Color = GetAccent(); s.Parent = btn
+    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40,40,55)}):Play() end)
+    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(22,22,28)}):Play() end)
+    btn.MouseButton1Click:Connect(function()
+        local ok, err = pcall(callback)
+        if not ok then warn("[GIDRAX] " .. tostring(err)) end
+    end)
+    return btn
+end
+
+local function CreateToggle(text, order, default, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.BackgroundColor3 = default and Color3.fromRGB(40, 10, 60) or Color3.fromRGB(22, 22, 28)
+    btn.Text = text .. ": " .. (default and T("on") or T("off"))
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.Font = Enum.Font.Gotham; btn.TextSize = 12
+    btn.LayoutOrder = order; btn.ZIndex = 1012; btn.Parent = ContentScroll
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = btn
+    local s = Instance.new("UIStroke"); s.Thickness = 1.5; s.Color = GetAccent(); s.Parent = btn
+    local state = default
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = text .. ": " .. (state and T("on") or T("off"))
+        btn.BackgroundColor3 = state and Color3.fromRGB(40, 10, 60) or Color3.fromRGB(22, 22, 28)
+        local ok, err = pcall(callback, state)
+        if not ok then warn("[GIDRAX] " .. tostring(err)) end
+    end)
+    return btn
+end
+
+local function CreateTextBox(placeholder, order, default, onCommit)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -10, 0, 30)
+    box.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    box.Text = default or ""
+    box.PlaceholderText = placeholder
+    box.TextColor3 = Color3.fromRGB(220, 220, 220)
+    box.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+    box.Font = Enum.Font.Gotham; box.TextSize = 12
+    box.ClearTextOnFocus = false
+    box.LayoutOrder = order; box.ZIndex = 1012; box.Parent = ContentScroll
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = box
+    local s = Instance.new("UIStroke"); s.Thickness = 1.5; s.Color = GetAccent(); s.Parent = box
+    box.FocusLost:Connect(function()
+        local ok, err = pcall(onCommit, box.Text)
+        if not ok then warn("[GIDRAX] " .. tostring(err)) end
+    end)
+    return box
+end
+
+local function CreateTabButton(name, order)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 34)
+    btn.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+    btn.Text = name; btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.GothamBold; btn.TextSize = 11
+    btn.LayoutOrder = order; btn.ZIndex = 1011; btn.Parent = TabBar
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = btn
+    local s = Instance.new("UIStroke"); s.Thickness = 1.5; s.Color = GetAccent(); s.Parent = btn
+    table.insert(AllTabButtons, btn)
+    return btn
+end
+
+-- ============================================================
 -- ОПРЕДЕЛЕНИЕ СВОЕГО УЧАСТКА
 -- ============================================================
 
--- Возвращает свой Plot (Model/Part) если найден.
--- Ищет по имени игрока, атрибутам Owner/Player/OwnerId/UserId и Plot.
-local function GetMyPlot()
+-- Находим плот игрока по разным возможным именам:
+--   "PlayerName's Plot", "PlayerName Plot", "PlayerName"
+-- и по атрибутам/владельцу.
+local function GetOwnPlot()
     local myName = LocalPlayer.Name
-    local myUserId = tostring(LocalPlayer.UserId)
-    local lower = string.lower(myName)
+    local myUserId = LocalPlayer.UserId
+    local candidates = {
+        myName .. "'s Plot",
+        myName .. "s Plot",
+        myName .. " Plot",
+        myName,
+    }
 
-    -- 1) Прямой поиск объекта с именем игрока
+    -- 1) По имени в Workspace / PlotFolder
     for _, obj in ipairs(Workspace:GetChildren()) do
-        local n = string.lower(obj.Name)
-        if n == lower or n == lower .. "'s plot" or n == lower .. " plot"
-           or n == "plot_" .. lower or n == "plot-" .. lower then
-            return obj
+        if obj:IsA("Model") or obj:IsA("Folder") or obj:IsA("BasePart") then
+            for _, nm in ipairs(candidates) do
+                if obj.Name == nm then
+                    return obj
+                end
+            end
         end
     end
 
-    -- 2) Поиск по атрибутам
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        local owner = obj:GetAttribute("Owner")
-        local player = obj:GetAttribute("Player")
-        local ownerId = obj:GetAttribute("OwnerId") or obj:GetAttribute("UserId")
-        if (owner == myName or owner == myUserId or player == myName or player == myUserId
-            or tostring(ownerId) == myUserId) then
-            -- поднимаемся до самого верхнего контейнера (Plot/Baseplate)
-            local top = obj
-            local parent = obj.Parent
-            while parent and parent ~= Workspace do
-                local pn = string.lower(parent.Name)
-                if string.find(pn, "plot") or string.find(pn, lower) then
-                    top = parent
+    -- 2) В подпапках типа Plots / PlotFolder
+    for _, container in ipairs(Workspace:GetChildren()) do
+        if container:IsA("Folder") or container:IsA("Model") then
+            if string.find(string.lower(container.Name), "plot") or string.find(string.lower(container.Name), "base") then
+                for _, obj in ipairs(container:GetChildren()) do
+                    for _, nm in ipairs(candidates) do
+                        if obj.Name == nm then
+                            return obj
+                        end
+                    end
+                    -- по атрибуту Owner / Player
+                    local owner = obj:GetAttribute("Owner") or obj:GetAttribute("Player") or obj:GetAttribute("Creator")
+                    if owner == myName or owner == myUserId then
+                        return obj
+                    end
                 end
-                parent = parent.Parent
             end
-            return top
+        end
+    end
+
+    -- 3) По атрибутам на любом объекте Workspace
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local owner = obj:GetAttribute("Owner") or obj:GetAttribute("Player") or obj:GetAttribute("Creator")
+            if owner == myName or owner == myUserId then
+                return obj
+            end
         end
     end
 
     return nil
 end
 
--- Проверяет, принадлежит ли объект игроку (своему участку)
-local function IsMyObject(obj)
+-- Проверка: принадлежит ли объект моему плоту (по иерархии или атрибутам)
+local function IsInOwnPlot(obj, ownPlot)
     if not obj then return false end
-    local myName = LocalPlayer.Name
-    local myUserId = tostring(LocalPlayer.UserId)
-    local lower = string.lower(myName)
+    if not ownPlot then return false end
 
-    -- Проверка самого объекта и всех родителей
+    -- 1) объект является потомком своего плота
     local current = obj
     while current and current ~= Workspace do
-        local n = string.lower(current.Name)
-        if n == lower or n == lower .. "'s plot" or n == lower .. " plot"
-           or string.find(n, lower, 1, true) then
-            return true
-        end
-        local owner = current:GetAttribute("Owner") or current:GetAttribute("Player")
-        local ownerId = current:GetAttribute("OwnerId") or current:GetAttribute("UserId")
-        if owner == myName or owner == myUserId or tostring(ownerId) == myUserId then
-            return true
-        end
+        if current == ownPlot then return true end
         current = current.Parent
     end
 
-    -- Проверка детей (модель может содержать тег с именем игрока)
-    if obj:IsA("Model") then
-        for _, child in ipairs(obj:GetChildren()) do
-            if child:IsA("Model") or child:IsA("Folder") then
-                local cn = string.lower(child.Name)
-                if string.find(cn, lower, 1, true) then return true end
-            end
+    -- 2) атрибут Owner на объекте или его родителях
+    local check = obj
+    for _ = 1, 5 do
+        if not check then break end
+        local owner = check:GetAttribute("Owner") or check:GetAttribute("Player") or check:GetAttribute("Creator")
+        if owner == LocalPlayer.Name or owner == LocalPlayer.UserId then
+            return true
         end
+        check = check.Parent
     end
 
     return false
 end
 
 -- ============================================================
--- FARM — только СВОЙ участок
+-- FARM — только свой участок
 -- ============================================================
 
 local ResourceList = {
@@ -464,9 +591,8 @@ local ResourceList = {
 local function ScanForResources()
     local found = {}
     local seen = {}
-
-    local myPlot = GetMyPlot()
-    local plotRoot = myPlot or Workspace
+    local ownPlot = GetOwnPlot()
+    if not ownPlot then return found end
 
     local function addToBucket(resName, obj)
         if seen[obj] then return end
@@ -486,26 +612,29 @@ local function ScanForResources()
         return false
     end
 
-    for _, obj in ipairs(plotRoot:GetDescendants()) do
+    -- Сканируем только свой плот (GetDescendants внутри него)
+    for _, obj in ipairs(ownPlot:GetDescendants()) do
         if obj:IsA("Model") or obj:IsA("Part") then
-            -- Пропускаем чужие объекты, если они случайно попали в диапазон
-            if IsMyObject(obj) or myPlot then
-                matchByName(obj.Name, obj)
+            -- не собираем сам корень плота
+            if obj ~= ownPlot then
+                -- проверка принадлежности (страховка)
+                if IsInOwnPlot(obj, ownPlot) then
+                    matchByName(obj.Name, obj)
 
-                local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
-                if prompt then
-                    local promptText = tostring(prompt.ActionText or "") .. " " .. tostring(prompt.ObjectText or "")
-                    if not matchByName(promptText, obj) then
-                        if obj.Name and obj.Name ~= "" then
-                            addToBucket(obj.Name, obj)
+                    local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
+                    if prompt then
+                        local promptText = tostring(prompt.ActionText or "") .. " " .. tostring(prompt.ObjectText or "")
+                        if not matchByName(promptText, obj) then
+                            local key = obj.Name
+                            if key and key ~= "" then addToBucket(key, obj) end
                         end
                     end
-                end
 
-                if obj:IsA("Model") then
-                    for _, child in ipairs(obj:GetChildren()) do
-                        if child:IsA("BasePart") then
-                            matchByName(child.Name, obj)
+                    if obj:IsA("Model") then
+                        for _, child in ipairs(obj:GetChildren()) do
+                            if child:IsA("BasePart") then
+                                matchByName(child.Name, obj)
+                            end
                         end
                     end
                 end
@@ -518,8 +647,6 @@ end
 
 local function CollectResource(obj)
     if not obj or not obj.Parent then return end
-    -- Защита: собираем только своё
-    if not IsMyObject(obj) and GetMyPlot() == nil then return end
 
     local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
     if prompt then
@@ -1319,6 +1446,6 @@ CreateFloatingButtons()
 _G.GIDRAX_Poo = SpawnPoo
 _G.GIDRAX_Pee = SpawnPee
 _G.GIDRAX_Movement = LaunchMovement
-_G.GIDRAX_MyPlot = GetMyPlot
+_G.GIDRAX_GetOwnPlot = GetOwnPlot
 
-print("[GIDRAXID] v11 FULL loaded | own-plot detection added")
+print("[GIDRAXID] v11 FULL loaded | own plot detection")
