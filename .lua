@@ -1,7 +1,7 @@
 -- [] GIDRAX mode
--- GIDRAXID | v11 FULL
--- Добавлено: распознавание СВОЕГО участка (только свой плот/зона)
--- Сбор идёт ТОЛЬКО с твоего участка, чужие плоты игнорируются.
+-- GIDRAXID | v10 FULL
+-- Исправлено: сбор со ВСЕХ построек (не только первой), полный обход участка,
+-- повторный проход для тех же типов зданий, поддержка Concentrated Uranium.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -23,7 +23,7 @@ local L = {
     ru = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РАЗНОЕ",
         farmTitle="ФЕРМА | СБОР РЕСУРСОВ", scan="Сканировать участок",
         collectAll="Собрать ВСЁ", autoFarm="Авто-сбор", antiAfk="Анти-АФК",
-        noneFound="Ресурсы не найдены на твоём участке.",
+        noneFound="Ресурсы не найдены.",
         funTitle="FUN | ФУНКЦИИ",
         speedHack="Спидхак", speedValue="Скорость (число):",
         applySpeed="Применить скорость", fly="Полёт", flySpeed="Скорость полёта:",
@@ -44,7 +44,7 @@ local L = {
     en = { title="GIDRAXID", farm="FARM", fun="FUN", misc="MISC",
         farmTitle="FARM | RESOURCE COLLECTION", scan="Scan plot",
         collectAll="Collect ALL", autoFarm="Auto-farm", antiAfk="Anti-AFK",
-        noneFound="No resources on your plot.",
+        noneFound="No resources found.",
         funTitle="FUN | FEATURES",
         speedHack="Speedhack", speedValue="Speed (number):",
         applySpeed="Apply speed", fly="Fly", flySpeed="Fly speed:",
@@ -65,7 +65,7 @@ local L = {
     uk = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РІЗНЕ",
         farmTitle="ФЕРМА | ЗБІР РЕСУРСІВ", scan="Сканувати ділянку",
         collectAll="Зібрати ВСЕ", autoFarm="Авто-збір", antiAfk="Анти-АФК",
-        noneFound="Ресурси не знайдено на твоїй ділянці.",
+        noneFound="Ресурси не знайдено.",
         funTitle="FUN | ФУНКЦІЇ",
         speedHack="Спідхак", speedValue="Швидкість (число):",
         applySpeed="Застосувати", fly="Політ", flySpeed="Швидкість польоту:",
@@ -86,7 +86,7 @@ local L = {
     be = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РОЗНАЕ",
         farmTitle="ФЕРМА | ЗБОР РЭСУРСАЎ", scan="Сканаваць участк",
         collectAll="Сабраць УСЁ", autoFarm="Аўта-збор", antiAfk="Анты-АФК",
-        noneFound="Рэсурсы не знойдзены на тваёй дзялянцы.",
+        noneFound="Рэсурсы не знойдзены.",
         funTitle="FUN | ФУНКЦЫІ",
         speedHack="Спідхак", speedValue="Хуткасць (лік):",
         applySpeed="Прымяніць", fly="Паход", flySpeed="Хуткасць паходу:",
@@ -102,7 +102,7 @@ local L = {
         rainbow="Вясёлкавы", red="Чырвоны", blue="Сіні", orange="Аранжавы",
         green="Зялёны", yellow="Жоўты", white="Белы", purple="Фіялетавы",
         azure="Лазурны", cyan="Блакітны", language="Мова",
-        antiLag="Anti-Lag (часцінкі/святло)", fpsBoost="FPS Boost (цені/пост-эфэкты)",
+        antiLag="Anti-Lag (часцінкі/святло)", fpsBoost="FPS Boost (цені/пост-эфекты)",
         on="УКЛ", off="ВЫКЛ" },
 }
 local function T(k) return L[Lang][k] or k end
@@ -489,94 +489,7 @@ local function CreateTabButton(name, order)
 end
 
 -- ============================================================
--- ОПРЕДЕЛЕНИЕ СВОЕГО УЧАСТКА
--- ============================================================
-
--- Находим плот игрока по разным возможным именам:
---   "PlayerName's Plot", "PlayerName Plot", "PlayerName"
--- и по атрибутам/владельцу.
-local function GetOwnPlot()
-    local myName = LocalPlayer.Name
-    local myUserId = LocalPlayer.UserId
-    local candidates = {
-        myName .. "'s Plot",
-        myName .. "s Plot",
-        myName .. " Plot",
-        myName,
-    }
-
-    -- 1) По имени в Workspace / PlotFolder
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj:IsA("Model") or obj:IsA("Folder") or obj:IsA("BasePart") then
-            for _, nm in ipairs(candidates) do
-                if obj.Name == nm then
-                    return obj
-                end
-            end
-        end
-    end
-
-    -- 2) В подпапках типа Plots / PlotFolder
-    for _, container in ipairs(Workspace:GetChildren()) do
-        if container:IsA("Folder") or container:IsA("Model") then
-            if string.find(string.lower(container.Name), "plot") or string.find(string.lower(container.Name), "base") then
-                for _, obj in ipairs(container:GetChildren()) do
-                    for _, nm in ipairs(candidates) do
-                        if obj.Name == nm then
-                            return obj
-                        end
-                    end
-                    -- по атрибуту Owner / Player
-                    local owner = obj:GetAttribute("Owner") or obj:GetAttribute("Player") or obj:GetAttribute("Creator")
-                    if owner == myName or owner == myUserId then
-                        return obj
-                    end
-                end
-            end
-        end
-    end
-
-    -- 3) По атрибутам на любом объекте Workspace
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") then
-            local owner = obj:GetAttribute("Owner") or obj:GetAttribute("Player") or obj:GetAttribute("Creator")
-            if owner == myName or owner == myUserId then
-                return obj
-            end
-        end
-    end
-
-    return nil
-end
-
--- Проверка: принадлежит ли объект моему плоту (по иерархии или атрибутам)
-local function IsInOwnPlot(obj, ownPlot)
-    if not obj then return false end
-    if not ownPlot then return false end
-
-    -- 1) объект является потомком своего плота
-    local current = obj
-    while current and current ~= Workspace do
-        if current == ownPlot then return true end
-        current = current.Parent
-    end
-
-    -- 2) атрибут Owner на объекте или его родителях
-    local check = obj
-    for _ = 1, 5 do
-        if not check then break end
-        local owner = check:GetAttribute("Owner") or check:GetAttribute("Player") or check:GetAttribute("Creator")
-        if owner == LocalPlayer.Name or owner == LocalPlayer.UserId then
-            return true
-        end
-        check = check.Parent
-    end
-
-    return false
-end
-
--- ============================================================
--- FARM — только свой участок
+-- FARM — ИСПРАВЛЕННЫЙ СБОР
 -- ============================================================
 
 local ResourceList = {
@@ -588,11 +501,11 @@ local ResourceList = {
     "Concentrated Uranium","Uranium Ore","Stable Uranium","Uranium",
 }
 
+-- Собираем ВСЕ объекты во всём Workspace, где есть ProximityPrompt,
+-- и группируем по имени ресурса. Никаких "первых попавшихся" — идём по всему.
 local function ScanForResources()
     local found = {}
     local seen = {}
-    local ownPlot = GetOwnPlot()
-    if not ownPlot then return found end
 
     local function addToBucket(resName, obj)
         if seen[obj] then return end
@@ -612,30 +525,33 @@ local function ScanForResources()
         return false
     end
 
-    -- Сканируем только свой плот (GetDescendants внутри него)
-    for _, obj in ipairs(ownPlot:GetDescendants()) do
+    -- Проходим ВСЁ дерево Workspace, а не только прямых детей
+    for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") or obj:IsA("Part") then
-            -- не собираем сам корень плота
-            if obj ~= ownPlot then
-                -- проверка принадлежности (страховка)
-                if IsInOwnPlot(obj, ownPlot) then
-                    matchByName(obj.Name, obj)
+            -- 1) по имени объекта
+            matchByName(obj.Name, obj)
 
-                    local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
-                    if prompt then
-                        local promptText = tostring(prompt.ActionText or "") .. " " .. tostring(prompt.ObjectText or "")
-                        if not matchByName(promptText, obj) then
-                            local key = obj.Name
-                            if key and key ~= "" then addToBucket(key, obj) end
-                        end
+            -- 2) по ProximityPrompt внутри
+            local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
+            if prompt then
+                local promptText = tostring(prompt.ActionText or "") .. " " .. tostring(prompt.ObjectText or "")
+                if matchByName(promptText, obj) then
+                    -- уже добавлен
+                else
+                    -- если prompt есть, но имя не совпало ни с одним ресурсом —
+                    -- сохраняем под именем объекта, чтобы точно попробовать собрать
+                    local key = obj.Name
+                    if key and key ~= "" then
+                        addToBucket(key, obj)
                     end
+                end
+            end
 
-                    if obj:IsA("Model") then
-                        for _, child in ipairs(obj:GetChildren()) do
-                            if child:IsA("BasePart") then
-                                matchByName(child.Name, obj)
-                            end
-                        end
+            -- 3) по дочерним частям модели (иногда ресурс лежит частями)
+            if obj:IsA("Model") then
+                for _, child in ipairs(obj:GetChildren()) do
+                    if child:IsA("BasePart") then
+                        matchByName(child.Name, obj)
                     end
                 end
             end
@@ -645,9 +561,12 @@ local function ScanForResources()
     return found
 end
 
+-- Универсальная попытка собрать объект: prompt, потом все RemoteEvent с "collect",
+-- потом ProximityPrompt у детей.
 local function CollectResource(obj)
     if not obj or not obj.Parent then return end
 
+    -- 1) Прямой prompt на объекте
     local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
     if prompt then
         pcall(function()
@@ -656,6 +575,7 @@ local function CollectResource(obj)
         end)
     end
 
+    -- 2) Prompt у всех детей модели
     if obj:IsA("Model") then
         for _, child in ipairs(obj:GetDescendants()) do
             local p = child:FindFirstChildOfClass("ProximityPrompt")
@@ -668,6 +588,7 @@ local function CollectResource(obj)
         end
     end
 
+    -- 3) RemoteEvent'ы (на случай если сбор идёт через remote)
     for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
         if remote:IsA("RemoteEvent") then
             local n = string.lower(remote.Name)
@@ -680,16 +601,20 @@ local function CollectResource(obj)
     end
 end
 
+-- Сбор всех найденных ресурсов (с повторными проходами, чтобы не пропустить одинаковые постройки)
 local function CollectAllFound()
     local found = ScanForResources()
+    local collectedAny = false
     for _, objs in pairs(found) do
         for _, obj in ipairs(objs) do
             if obj and obj.Parent then
                 CollectResource(obj)
+                collectedAny = true
                 task.wait(0.03)
             end
         end
     end
+    return collectedAny
 end
 
 local function SetAutoFarm(state)
@@ -698,6 +623,7 @@ local function SetAutoFarm(state)
     if state then
         AutoFarmTask = task.spawn(function()
             while AutoFarmRunning do
+                -- 3 прохода подряд, чтобы собрать всё на участке (одинаковые здания, остатки и т.д.)
                 for _ = 1, 3 do
                     if not AutoFarmRunning then break end
                     pcall(CollectAllFound)
@@ -1247,6 +1173,7 @@ local function BuildFarmTab()
     order = order + 1
 
     CreateButton(T("collectAll"), order, function()
+        -- 3 прохода, чтобы собрать ВСЁ со всех одинаковых построек
         for _ = 1, 3 do
             CollectAllFound()
             task.wait(0.5)
@@ -1446,6 +1373,5 @@ CreateFloatingButtons()
 _G.GIDRAX_Poo = SpawnPoo
 _G.GIDRAX_Pee = SpawnPee
 _G.GIDRAX_Movement = LaunchMovement
-_G.GIDRAX_GetOwnPlot = GetOwnPlot
 
-print("[GIDRAXID] v11 FULL loaded | own plot detection")
+print("[GIDRAXID] v10 FULL loaded | farm fixed (all buildings)")
