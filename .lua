@@ -1,8 +1,8 @@
 -- [] GIDRAX mode
--- GIDRAXID | v8 FULL
--- - убраны авто-циклы у срать/сать/движухи (только по кнопке)
--- - длина говна увеличена (базовая длина 5)
--- - добавлены новые ID иконок + дефолтная
+-- GIDRAXID | v9 FULL
+-- - исправлен сбор ресурсов: добавлены "Concentrated Uranium" / "Uranium Ore" / "Stable Uranium"
+-- - добавлен Anti-Lag + FPS Boost (тени off, частицы off, пост-эффекты off)
+-- - Misc: Anti Lag toggle, FPS Boost toggle
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -39,6 +40,7 @@ local L = {
         rainbow="Радужный", red="Красный", blue="Синий", orange="Оранжевый",
         green="Зелёный", yellow="Жёлтый", white="Белый", purple="Фиолетовый",
         azure="Лазурный", cyan="Голубой", language="Язык",
+        antiLag="Anti-Lag (частицы/свет)", fpsBoost="FPS Boost (тени/пост-эффекты)",
         on="ВКЛ", off="ВЫКЛ" },
     en = { title="GIDRAXID", farm="FARM", fun="FUN", misc="MISC",
         farmTitle="FARM | RESOURCE COLLECTION", scan="Scan plot",
@@ -59,6 +61,7 @@ local L = {
         rainbow="Rainbow", red="Red", blue="Blue", orange="Orange",
         green="Green", yellow="Yellow", white="White", purple="Purple",
         azure="Azure", cyan="Cyan", language="Language",
+        antiLag="Anti-Lag (particles/light)", fpsBoost="FPS Boost (shadows/post-fx)",
         on="ON", off="OFF" },
     uk = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РІЗНЕ",
         farmTitle="ФЕРМА | ЗБІР РЕСУРСІВ", scan="Сканувати ділянку",
@@ -79,6 +82,7 @@ local L = {
         rainbow="Веселковий", red="Червоний", blue="Синій", orange="Помаранчевий",
         green="Зелений", yellow="Жовтий", white="Білий", purple="Фіолетовий",
         azure="Лазурний", cyan="Блакитний", language="Мова",
+        antiLag="Anti-Lag (частинки/світло)", fpsBoost="FPS Boost (тіні/пост-ефекти)",
         on="УВІМК", off="ВИКЛ" },
     be = { title="GIDRAXID", farm="ФЕРМА", fun="FUN", misc="РОЗНАЕ",
         farmTitle="ФЕРМА | ЗБОР РЭСУРСАЎ", scan="Сканаваць участк",
@@ -99,6 +103,7 @@ local L = {
         rainbow="Вясёлкавы", red="Чырвоны", blue="Сіні", orange="Аранжавы",
         green="Зялёны", yellow="Жоўты", white="Белы", purple="Фіялетавы",
         azure="Лазурны", cyan="Блакітны", language="Мова",
+        antiLag="Anti-Lag (часцінкі/святло)", fpsBoost="FPS Boost (цені/пост-эфекты)",
         on="УКЛ", off="ВЫКЛ" },
 }
 local function T(k) return L[Lang][k] or k end
@@ -344,16 +349,17 @@ local FlyBodyVelocity = nil
 local FlyKeys = {}
 local MobileFlyDir = Vector3.zero
 
--- базовая длина 5 (было 2.5)
 local POO_BASE_LEN = 5
 local PooConfig = { length = 1.0, width = 1.0, height = 1.0 }
 local PeeConfig = { puddleLength = 1.0, puddleWidth = 1.0 }
 local ShitCount = 50
 
--- Только видимость кнопок, не авто-циклы
 local ShowPooBtn = false
 local ShowPeeBtn = false
 local ShowMovementBtn = false
+
+local AntiLagEnabled = false
+local FPSBoostEnabled = false
 
 -- ============================================================
 -- УТИЛИТЫ GUI
@@ -484,15 +490,21 @@ local function CreateTabButton(name, order)
 end
 
 -- ============================================================
--- FARM
+-- FARM (обновлённый список ресурсов)
 -- ============================================================
 
 local ResourceList = {
+    -- обычные
     "Wheat","Corn","Coal","Wood","Flour","Carrot","Books",
     "Oil","Iron","Cement","Gold","Coin Bag","Research",
-    "Diamond","Uranium Ore","Stable Uranium","Data Cube",
-    "Dark Matter","Alien Essence","Antimatter","Robo Heads",
-    "Quantum Core","Supernova Charge","Gamma Ray","Event Plant"
+    "Diamond","Data Cube","Dark Matter","Alien Essence",
+    "Antimatter","Robo Heads","Quantum Core","Supernova Charge",
+    "Gamma Ray","Event Plant",
+    -- уран (исправлено: было пропущено "Concentrated Uranium")
+    "Concentrated Uranium",
+    "Uranium Ore",
+    "Stable Uranium",
+    "Uranium",
 }
 
 local function ScanForResources()
@@ -568,6 +580,74 @@ local function SetAntiAfk(state)
         AntiAfkConn = LocalPlayer.Idled:Connect(function()
             local vu = game:GetService("VirtualUser")
             vu:CaptureController(); vu:ClickButton2(Vector2.new())
+        end)
+    end
+end
+
+-- ============================================================
+-- ANTI-LAG / FPS BOOST
+-- ============================================================
+
+local function SetAntiLag(state)
+    AntiLagEnabled = state
+    if state then
+        -- Отключаем частицы, дым, огонь, искры, трейлы
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") or obj:IsA("Trail") then
+                obj.Enabled = false
+            end
+        end
+        -- Отключаем PointLight / SpotLight / SurfaceLight
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+                obj.Enabled = false
+            end
+        end
+        -- Отключаем пост-эффекты в Lighting
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("PostEffect") then
+                obj.Enabled = false
+            end
+        end
+        -- Уменьшаем качество графики если доступно
+        pcall(function()
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        end)
+    else
+        -- Восстановление не делаем, чтобы не нагружать; но можно перезапустить скрипт
+    end
+end
+
+local function SetFPSBoost(state)
+    FPSBoostEnabled = state
+    if state then
+        -- Отключаем глобальные тени
+        Lighting.GlobalShadows = false
+        Lighting.EnvironmentDiffuseScale = 0
+        Lighting.EnvironmentSpecularScale = 0
+        Lighting.FogEnd = 1e9
+        -- Отключаем тени у всех частей
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CastShadow = false
+            end
+        end
+        -- Отключаем пост-эффекты
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("PostEffect") then
+                obj.Enabled = false
+            end
+        end
+        -- Уменьшаем качество рендера
+        pcall(function()
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        end)
+        pcall(function()
+            settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
+        end)
+        -- Ограничиваем FPS если доступно
+        pcall(function()
+            if setfpscap then setfpscap(60) end
         end)
     end
 end
@@ -696,7 +776,7 @@ end
 local MobileFlyPad = CreateMobileFlyControls()
 
 -- ============================================================
--- КАСТОМНЫЙ ВЗРЫВ
+-- ВЗРЫВ / ГОВНО / САТЬ / ДВИЖУХА (без изменений логики)
 -- ============================================================
 
 local function CreateCustomExplosion(position, radius, pressure)
@@ -758,10 +838,6 @@ local function CreateCustomExplosion(position, radius, pressure)
     end
 end
 
--- ============================================================
--- ГОВНО (вытянутый цилиндр, длина базовая 5)
--- ============================================================
-
 local function CreatePooEntity(position, direction, sizeMul)
     sizeMul = sizeMul or 1
     local model = Instance.new("Model")
@@ -789,7 +865,6 @@ local function CreatePooEntity(position, direction, sizeMul)
     model.Parent = Workspace
     part.AssemblyLinearVelocity = direction and direction.Unit * 6 + Vector3.new(0, -5, 0) or Vector3.new(math.random(-3,3), -5, math.random(-3,3))
 
-    -- след-лужа
     local stainConn
     local lastStainPos = nil
     stainConn = RunService.Heartbeat:Connect(function()
@@ -829,10 +904,6 @@ local function SpawnPoo()
     CreatePooEntity(hrp.Position + Vector3.new(0, -2.5, 0), hrp.CFrame.LookVector, 1)
 end
 
--- ============================================================
--- САТЬ (только лужа под игроком)
--- ============================================================
-
 local function SpawnPee()
     local char = LocalPlayer.Character
     if not char then return end
@@ -859,10 +930,6 @@ local function SpawnPee()
     TweenService:Create(puddle, TweenInfo.new(1), {Size = Vector3.new(0.1, 1.3 * PeeConfig.puddleWidth, 1.3 * PeeConfig.puddleLength)}):Play()
     task.delay(20, function() if puddle and puddle.Parent then puddle:Destroy() end end)
 end
-
--- ============================================================
--- ПАДАЮЩЕЕ ГОВНО
--- ============================================================
 
 local function CreateFallingShit(targetPos)
     local model = Instance.new("Model")
@@ -977,7 +1044,7 @@ local function LaunchMovement()
 end
 
 -- ============================================================
--- ПЛАВАЮЩИЕ КНОПКИ (появляются по тумблерам)
+-- ПЛАВАЮЩИЕ КНОПКИ
 -- ============================================================
 
 local FloatingFrame = nil
@@ -1081,7 +1148,6 @@ local function BuildFarmTab()
     CreateToggle(T("antiAfk"), order, AntiAfkRunning, SetAntiAfk)
 end
 
--- ID иконок: дефолтная + все старые + новые. 92578209609345 уже был в списке — оставлен один раз.
 local IconPresetIDs = {
     DEFAULT_ICON,
     "121475011102153","113291566352727","98847893535543",
@@ -1222,6 +1288,12 @@ BuildMiscTabRef = function()
     ClearContent()
     CreateSectionTitle(T("miscTitle"), 1)
     local order = 2
+
+    CreateToggle(T("antiLag"), order, AntiLagEnabled, SetAntiLag)
+    order = order + 1
+    CreateToggle(T("fpsBoost"), order, FPSBoostEnabled, SetFPSBoost)
+    order = order + 1
+
     CreateSectionTitle(T("strokeColor"), order); order = order + 1
     for _, p in ipairs(StrokePresets) do
         local btn = CreateButton("●  " .. T(p.key), order, function() SetAccentPreset(p) end)
@@ -1264,4 +1336,4 @@ _G.GIDRAX_Poo = SpawnPoo
 _G.GIDRAX_Pee = SpawnPee
 _G.GIDRAX_Movement = LaunchMovement
 
-print("[GIDRAXID] v8 FULL loaded")
+print("[GIDRAXID] v9 FULL loaded | uranium fix + anti-lag + fps boost")
