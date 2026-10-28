@@ -1,8 +1,7 @@
 -- [] GIDRAX mode
--- GIDRAXID | v9 FULL
--- - исправлен сбор ресурсов: добавлены "Concentrated Uranium" / "Uranium Ore" / "Stable Uranium"
--- - добавлен Anti-Lag + FPS Boost (тени off, частицы off, пост-эффекты off)
--- - Misc: Anti Lag toggle, FPS Boost toggle
+-- GIDRAXID | v10 FULL
+-- Фикс: сбор со ВСЕХ построек одного типа (не только с первой).
+-- Сбор идёт по прямым потомкам Plot игрока, каждый объект обрабатывается отдельно.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -490,65 +489,142 @@ local function CreateTabButton(name, order)
 end
 
 -- ============================================================
--- FARM (обновлённый список ресурсов)
+-- FARM — ИСПРАВЛЕННЫЙ СБОР
 -- ============================================================
 
 local ResourceList = {
-    -- обычные
     "Wheat","Corn","Coal","Wood","Flour","Carrot","Books",
     "Oil","Iron","Cement","Gold","Coin Bag","Research",
     "Diamond","Data Cube","Dark Matter","Alien Essence",
     "Antimatter","Robo Heads","Quantum Core","Supernova Charge",
     "Gamma Ray","Event Plant",
-    -- уран (исправлено: было пропущено "Concentrated Uranium")
-    "Concentrated Uranium",
-    "Uranium Ore",
-    "Stable Uranium",
-    "Uranium",
+    "Concentrated Uranium","Uranium Ore","Stable Uranium","Uranium",
 }
 
+local function GetPlayerPlot()
+    -- Ищем участок игрока по нескольким вариантам имени
+    local candidates = {
+        Workspace:FindFirstChild(LocalPlayer.Name .. "'s Plot"),
+        Workspace:FindFirstChild(LocalPlayer.Name .. "s Plot"),
+        Workspace:FindFirstChild(LocalPlayer.Name),
+        Workspace:FindFirstChild("Plot_" .. LocalPlayer.UserId),
+        Workspace:FindFirstChild(LocalPlayer.UserId),
+    }
+    for _, c in ipairs(candidates) do
+        if c then return c end
+    end
+    -- fallback: любой объект, в имени которого есть имя игрока
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("Model") and string.find(string.lower(obj.Name), string.lower(LocalPlayer.Name)) then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Проверяем, что объект принадлежит игроку / его участку
+local function IsOwnedByPlayer(obj)
+    local plot = GetPlayerPlot()
+    if not plot then return true end
+    local current = obj
+    while current and current ~= Workspace do
+        if current == plot then return true end
+        current = current.Parent
+    end
+    return false
+end
+
+-- Ключевой фикс: не схлопываем в таблицу по имени ресурса,
+-- а собираем ВСЕ объекты и обходим их по одному
 local function ScanForResources()
     local found = {}
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") or obj:IsA("Part") then
+    local checked = {}
+
+    local function processObj(obj)
+        if checked[obj] then return end
+        checked[obj] = true
+        if not (obj:IsA("Model") or obj:IsA("Part")) then return end
+
+        local nameLower = string.lower(obj.Name)
+        for _, res in ipairs(ResourceList) do
+            if string.find(nameLower, string.lower(res)) then
+                found[res] = found[res] or {}
+                table.insert(found[res], obj)
+                return
+            end
+        end
+
+        -- по ProximityPrompt (если имя объекта не совпадает)
+        local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
+        if prompt then
+            local pn = string.lower((prompt.ActionText or "") .. " " .. (prompt.ObjectText or ""))
             for _, res in ipairs(ResourceList) do
-                if string.find(string.lower(obj.Name), string.lower(res)) then
+                if string.find(pn, string.lower(res)) then
                     found[res] = found[res] or {}
                     table.insert(found[res], obj)
-                end
-            end
-            local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
-            if prompt then
-                local pn = string.lower((prompt.ActionText or "") .. " " .. (prompt.ObjectText or ""))
-                for _, res in ipairs(ResourceList) do
-                    if string.find(pn, string.lower(res)) then
-                        found[res] = found[res] or {}
-                        table.insert(found[res], obj)
-                    end
+                    return
                 end
             end
         end
     end
+
+    -- Сначала обходим весь Workspace
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        processObj(obj)
+    end
+
     return found
 end
 
-local function CollectResource(obj)
+-- Сбор с одного объекта
+local function CollectFromObject(obj)
+    if not obj or not obj.Parent then return false end
+
     local prompt = obj:FindFirstChildOfClass("ProximityPrompt")
+    if not prompt then
+        -- может быть в дочерних моделях
+        prompt = obj:FindFirstChildOfClass("ProximityPrompt") or (obj:FindFirstChild("ProximityPrompt"))
+        if not prompt then
+            for _, d in ipairs(obj:GetDescendants()) do
+                if d:IsA("ProximityPrompt") then prompt = d; break end
+            end
+        end
+    end
+
     if prompt then
         pcall(function()
             if fireproximityprompt then fireproximityprompt(prompt)
             else prompt:InputHoldBegin(); task.wait(0.1); prompt:InputHoldEnd() end
         end)
-        return
+        return true
     end
+
+    -- Fallback: RemoteEvent
     for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
         if remote:IsA("RemoteEvent") then
             local n = string.lower(remote.Name)
-            if string.find(n, "collect") or string.find(n, "harvest") or string.find(n, "gather") then
+            if string.find(n, "collect") or string.find(n, "harvest") or string.find(n, "gather") or string.find(n, "pickup") then
                 pcall(function() remote:FireServer(obj) end)
             end
         end
     end
+    return false
+end
+
+-- Собрать ВСЁ: обходим все объекты подряд
+local function CollectAll()
+    local found = ScanForResources()
+    local total = 0
+    for _, objs in pairs(found) do
+        for _, obj in ipairs(objs) do
+            if obj and obj.Parent then
+                CollectFromObject(obj)
+                total = total + 1
+                task.wait(0.05)
+            end
+        end
+    end
+    return total
 end
 
 local function SetAutoFarm(state)
@@ -557,16 +633,7 @@ local function SetAutoFarm(state)
     if state then
         AutoFarmTask = task.spawn(function()
             while AutoFarmRunning do
-                local ok, found = pcall(ScanForResources)
-                if ok and found then
-                    for _, objs in pairs(found) do
-                        for _, obj in ipairs(objs) do
-                            if not AutoFarmRunning then break end
-                            pcall(CollectResource, obj)
-                        end
-                        if not AutoFarmRunning then break end
-                    end
-                end
+                pcall(CollectAll)
                 task.wait(2)
             end
         end)
@@ -591,64 +658,39 @@ end
 local function SetAntiLag(state)
     AntiLagEnabled = state
     if state then
-        -- Отключаем частицы, дым, огонь, искры, трейлы
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("ParticleEmitter") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") or obj:IsA("Trail") then
                 obj.Enabled = false
             end
         end
-        -- Отключаем PointLight / SpotLight / SurfaceLight
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
                 obj.Enabled = false
             end
         end
-        -- Отключаем пост-эффекты в Lighting
         for _, obj in ipairs(Lighting:GetChildren()) do
-            if obj:IsA("PostEffect") then
-                obj.Enabled = false
-            end
+            if obj:IsA("PostEffect") then obj.Enabled = false end
         end
-        -- Уменьшаем качество графики если доступно
-        pcall(function()
-            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        end)
-    else
-        -- Восстановление не делаем, чтобы не нагружать; но можно перезапустить скрипт
+        pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
     end
 end
 
 local function SetFPSBoost(state)
     FPSBoostEnabled = state
     if state then
-        -- Отключаем глобальные тени
         Lighting.GlobalShadows = false
         Lighting.EnvironmentDiffuseScale = 0
         Lighting.EnvironmentSpecularScale = 0
         Lighting.FogEnd = 1e9
-        -- Отключаем тени у всех частей
         for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                obj.CastShadow = false
-            end
+            if obj:IsA("BasePart") then obj.CastShadow = false end
         end
-        -- Отключаем пост-эффекты
         for _, obj in ipairs(Lighting:GetChildren()) do
-            if obj:IsA("PostEffect") then
-                obj.Enabled = false
-            end
+            if obj:IsA("PostEffect") then obj.Enabled = false end
         end
-        -- Уменьшаем качество рендера
-        pcall(function()
-            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        end)
-        pcall(function()
-            settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
-        end)
-        -- Ограничиваем FPS если доступно
-        pcall(function()
-            if setfpscap then setfpscap(60) end
-        end)
+        pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+        pcall(function() settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01 end)
+        pcall(function() if setfpscap then setfpscap(60) end end)
     end
 end
 
@@ -776,7 +818,7 @@ end
 local MobileFlyPad = CreateMobileFlyControls()
 
 -- ============================================================
--- ВЗРЫВ / ГОВНО / САТЬ / ДВИЖУХА (без изменений логики)
+-- ВЗРЫВ / ГОВНО / САТЬ / ДВИЖУХА
 -- ============================================================
 
 local function CreateCustomExplosion(position, radius, pressure)
@@ -1117,8 +1159,14 @@ local function BuildFarmTab()
         table.sort(keys)
         for _, res in ipairs(keys) do
             order = order + 1
-            local btn = CreateButton(res .. "  ×" .. #found[res], order, function()
-                for _, obj in ipairs(found[res]) do CollectResource(obj) end
+            local objs = found[res]
+            local btn = CreateButton(res .. "  ×" .. #objs, order, function()
+                for _, obj in ipairs(objs) do
+                    if obj and obj.Parent then
+                        CollectFromObject(obj)
+                        task.wait(0.05)
+                    end
+                end
             end)
             btn:SetAttribute("IsResBtn", true)
         end
@@ -1136,10 +1184,8 @@ local function BuildFarmTab()
     order = order + 1
 
     CreateButton(T("collectAll"), order, function()
-        local found = ScanForResources()
-        for _, objs in pairs(found) do
-            for _, obj in ipairs(objs) do CollectResource(obj); task.wait(0.05) end
-        end
+        local total = CollectAll()
+        print("[GIDRAX] Collected objects:", total)
     end)
     order = order + 1
 
@@ -1336,4 +1382,4 @@ _G.GIDRAX_Poo = SpawnPoo
 _G.GIDRAX_Pee = SpawnPee
 _G.GIDRAX_Movement = LaunchMovement
 
-print("[GIDRAXID] v9 FULL loaded | uranium fix + anti-lag + fps boost")
+print("[GIDRAXID] v10 FULL loaded | farm: all duplicates")
